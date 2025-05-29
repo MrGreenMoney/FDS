@@ -13,7 +13,6 @@ from PySide6.QtGui import QIcon, QFont
 import mysql.connector
 from dotenv import load_dotenv
 
-# --- Always ensure requirements are installed ---
 REQUIRED = [
     ('PySide6', 'PySide6'),
     ('mysql', 'mysql-connector-python'),
@@ -24,7 +23,6 @@ for module, package in REQUIRED:
         print(f"[Auto-Installer] Installing missing package: {package}")
         subprocess.check_call([sys.executable, '-m', 'pip', 'install', package])
 
-# --- Frameworks and Patterns ---
 FRAMEWORKS = {
     'qbcore': ['qbcore', 'qb'],
     'qbx': ['qbx'],
@@ -33,7 +31,6 @@ FRAMEWORKS = {
     'other': []  # fallback: run all .sql files
 }
 
-# --- Advanced detection patterns for each framework ---
 FRAMEWORK_PATTERNS = {
     'esx': [
         r'\besx_', r'\busers\b', r'\bowned_vehicles\b', r'\baddon_account_data\b', r'\bdatastore_data\b', r'\bjobs\b', r'\bjob_grades\b',
@@ -77,7 +74,6 @@ WHITELISTED_FILES = [
     os.path.normpath('ox_doorlock/sql/ox_doorlock.sql'),
 ]
 
-# --- DB Connection Extraction ---
 def extract_mysql_url_from_cfg(cfg_path: Path) -> Optional[str]:
     with cfg_path.open(encoding='utf-8', errors='ignore') as f:
         for line in f:
@@ -148,7 +144,6 @@ def get_db_url(root: Path) -> Optional[str]:
             return url
     return None
 
-# --- Framework Detection ---
 def detect_framework_for_file(sql_path: Path) -> Optional[str]:
     name = sql_path.name.lower()
     try:
@@ -207,7 +202,6 @@ def detect_framework_for_file(sql_path: Path) -> Optional[str]:
         pass
     return None
 
-# --- SQL Filtering ---
 def filter_sql_files(sql_files: List[Path], framework: str) -> List[Path]:
     if framework == 'other':
         filtered = sql_files
@@ -252,7 +246,6 @@ def filter_sql_files(sql_files: List[Path], framework: str) -> List[Path]:
             filtered.append(f)
     return filtered
 
-# --- SQL Execution ---
 def run_sql_file(sql_path: Path, conn) -> Optional[str]:
     try:
         with sql_path.open(encoding='utf-8', errors='ignore') as f:
@@ -267,9 +260,9 @@ def run_sql_file(sql_path: Path, conn) -> Optional[str]:
     except Exception as e:
         return str(e)
 
-# --- Worker Thread for DB Execution ---
 class SQLRunnerThread(QThread):
     progress = Signal(int)
+    progress_status = Signal(str)
     result = Signal(list)
     error = Signal(str)
 
@@ -280,16 +273,23 @@ class SQLRunnerThread(QThread):
 
     def run(self):
         try:
+            self.progress_status.emit("Searching for database connection...")
             db_url = get_db_url(self.root)
             if not db_url:
                 self.error.emit("Could not find a MySQL connection string in .env or any server.cfg.")
                 return
+            
+            self.progress_status.emit("Parsing database configuration...")
             db_cfg = parse_mysql_url(db_url)
+            
+            self.progress_status.emit("Scanning for SQL files...")
             sql_files = find_files('*.sql', self.root)
             sql_files = filter_sql_files(sql_files, self.framework)
             if not sql_files:
                 self.error.emit("No relevant .sql files found for the selected framework.")
                 return
+            
+            self.progress_status.emit("Connecting to database...")
             try:
                 conn = mysql.connector.connect(
                     user=db_cfg['user'],
@@ -303,17 +303,22 @@ class SQLRunnerThread(QThread):
             except Exception as e:
                 self.error.emit(f"Database connection failed: {e}")
                 return
+            
             results = []
+            total_files = len(sql_files)
             for i, sql_path in enumerate(sql_files):
+                filename = sql_path.name
+                self.progress_status.emit(f"Processing {filename} ({i+1}/{total_files})")
                 error = run_sql_file(sql_path, conn)
                 results.append((str(sql_path.relative_to(self.root)), error is None, error or ""))
-                self.progress.emit(int((i+1)/len(sql_files)*100))
+                self.progress.emit(int((i+1)/total_files*100))
+            
+            self.progress_status.emit("Finalizing and closing connection...")
             conn.close()
             self.result.emit(results)
         except Exception as e:
             self.error.emit(str(e))
 
-# --- Main Window ---
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
@@ -324,7 +329,6 @@ class MainWindow(QWidget):
         main_layout.setSpacing(28)
         main_layout.setContentsMargins(56, 36, 56, 36)
 
-        # --- Section: Framework Selection ---
         fw_group = QGroupBox("1. Select Your FiveM Framework")
         fw_group.setStyleSheet("QGroupBox { background: #202c24; border: 1.5px solid #3a4d3c; border-radius: 22px; margin-top: 22px; font-weight: bold; font-size: 18px; padding: 18px 28px; }")
         fw_layout = QHBoxLayout()
@@ -346,7 +350,6 @@ class MainWindow(QWidget):
         fw_group.setLayout(fw_layout)
         main_layout.addWidget(fw_group)
 
-        # --- Section: Directory Picker ---
         dir_group = QGroupBox("2. Select Root Directory to Scan")
         dir_group.setStyleSheet("QGroupBox { background: #202c24; border: 1.5px solid #3a4d3c; border-radius: 22px; margin-top: 22px; font-weight: bold; font-size: 18px; padding: 18px 28px; }")
         dir_layout = QHBoxLayout()
@@ -362,7 +365,6 @@ class MainWindow(QWidget):
         dir_group.setLayout(dir_layout)
         main_layout.addWidget(dir_group)
 
-        # --- Section: Run Button ---
         self.run_btn = QPushButton("Run SQL Files")
         self.run_btn.setEnabled(False)
         self.run_btn.setStyleSheet("font-weight: bold; font-size: 22px; padding: 16px 60px; border-radius: 18px; background-color: #6fcf97; color: #181818; border: 2px solid #3a4d3c; margin-top: 18px;")
@@ -374,15 +376,46 @@ class MainWindow(QWidget):
         run_btn_layout.addStretch(1)
         main_layout.addLayout(run_btn_layout)
 
-        # --- Section: Progress Bar ---
+        progress_group = QGroupBox("3. Execution Progress")
+        progress_group.setStyleSheet("QGroupBox { background: #202c24; border: 1.5px solid #3a4d3c; border-radius: 22px; margin-top: 22px; font-weight: bold; font-size: 18px; padding: 18px 28px; }")
+        progress_group.setVisible(False)
+        progress_layout = QVBoxLayout()
+        
+        self.progress_status = QLabel("Ready to process SQL files...")
+        self.progress_status.setStyleSheet("font-size: 16px; color: #b2ffcc; margin-bottom: 12px; font-weight: 600;")
+        self.progress_status.setAlignment(Qt.AlignCenter)
+        progress_layout.addWidget(self.progress_status)
+        
         self.progress = QProgressBar()
         self.progress.setValue(0)
-        self.progress.setVisible(False)
-        self.progress.setFixedHeight(34)
-        self.progress.setStyleSheet("QProgressBar { background: #222; color: #fff; border-radius: 14px; font-size: 16px; } QProgressBar::chunk { background: #6fcf97; border-radius: 14px; }")
-        main_layout.addWidget(self.progress)
+        self.progress.setMinimum(0)
+        self.progress.setMaximum(100)
+        self.progress.setFixedHeight(28)
+        self.progress.setFormat("%p% (%v/%m)")
+        self.progress.setStyleSheet("""
+            QProgressBar {
+                background: #1a1a1a;
+                color: #ffffff;
+                border: 2px solid #3a4d3c;
+                border-radius: 14px;
+                font-size: 14px;
+                font-weight: bold;
+                text-align: center;
+                padding: 2px;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #4CAF50, stop:0.5 #6fcf97, stop:1 #81d4a1);
+                border-radius: 12px;
+                margin: 1px;
+            }
+        """)
+        progress_layout.addWidget(self.progress)
+        
+        progress_group.setLayout(progress_layout)
+        main_layout.addWidget(progress_group)
+        self.progress_group = progress_group
 
-        # --- Section: Results Table ---
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(["File", "Framework", "Status", "Error"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -391,16 +424,13 @@ class MainWindow(QWidget):
         self.table.setStyleSheet("QTableWidget { background: #181818; color: #fff; font-size: 16px; border-radius: 18px; } QHeaderView::section { background: #202c24; color: #6fcf97; font-weight: bold; font-size: 16px; border-radius: 18px; } QTableWidget::item { border-radius: 12px; }")
         main_layout.addWidget(self.table)
 
-        # --- Section: Spacer for bottom padding ---
         main_layout.addSpacerItem(QSpacerItem(20, 50, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
-        # --- Footer: Made by Mr.Green ---
         footer = QLabel("<span style='color:#6fcf97; font-size:24px; font-weight:bold;'>Made by Mr.Green</span>")
         footer.setAlignment(Qt.AlignCenter)
         footer.setStyleSheet("margin-top: 24px; margin-bottom: 0px;")
         main_layout.addWidget(footer)
 
-        # --- Set dark theme for the app ---
         self.setStyleSheet("""
             QWidget { background: #181818; color: #e0e0e0; font-family: 'Segoe UI', 'Arial', sans-serif; font-size: 17px; }
             QGroupBox { border: 1.5px solid #3a4d3c; border-radius: 22px; margin-top: 22px; font-weight: bold; font-size: 18px; padding: 18px 28px; }
@@ -429,18 +459,21 @@ class MainWindow(QWidget):
             QMessageBox.warning(self, "Missing Info", "Please select a root directory and framework.")
             return
         self.progress.setValue(0)
-        self.progress.setVisible(True)
+        self.progress_group.setVisible(True)
+        self.progress_status.setText("Initializing...")
         self.table.setRowCount(0)
         self.table.setVisible(False)
         self.run_btn.setEnabled(False)
         self.runner_thread = SQLRunnerThread(self.root_path, framework)
         self.runner_thread.progress.connect(self.progress.setValue)
+        self.runner_thread.progress_status.connect(self.progress_status.setText)
         self.runner_thread.result.connect(self.show_results)
         self.runner_thread.error.connect(self.show_error)
         self.runner_thread.start()
 
     def show_results(self, results):
-        self.progress.setVisible(False)
+        self.progress_group.setVisible(False)
+        self.progress_status.setText("Ready to process SQL files...")
         self.table.setRowCount(len(results))
         for i, (file, ok, err) in enumerate(results):
             file_path = self.root_path / file
@@ -458,7 +491,8 @@ class MainWindow(QWidget):
             QMessageBox.information(self, "SQL Runner", "All SQL files executed successfully!")
 
     def show_error(self, msg):
-        self.progress.setVisible(False)
+        self.progress_group.setVisible(False)
+        self.progress_status.setText("Ready to process SQL files...")
         self.run_btn.setEnabled(True)
         QMessageBox.critical(self, "Error", msg)
 
