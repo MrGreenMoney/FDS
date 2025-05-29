@@ -1,0 +1,4 @@
+mysql-connector-python>=8.0.0
+rich>=13.0.0
+python-dotenv>=1.0.0
+PySide6>=6.5.0 
