@@ -15,7 +15,7 @@ pip install -r requirements.txt
 
 ### 2. Run the GUI (Recommended)
 ```bash
-python fivem_sql_runner_gui.py
+python FDS_gui.py
 ```
 - Pick your framework (QBCore, QBX, OX, ESX, Other)
 - Pick your server folder (where server.cfg is)
@@ -23,7 +23,7 @@ python fivem_sql_runner_gui.py
 
 ### 3. Run the CLI (Terminal)
 ```bash
-python fivem_sql_runner.py
+python FDS_cli.py
 ```
 - Follow the prompts for framework and folder
 
@@ -59,7 +59,7 @@ pip install -r requirements.txt
 
 ### 2. Kør GUI (anbefalet)
 ```bash
-python fivem_sql_runner_gui.py
+python FDS_gui.py
 ```
 - Vælg dit framework (QBCore, QBX, OX, ESX, Andet)
 - Vælg din servermappe (hvor server.cfg ligger)
@@ -67,7 +67,7 @@ python fivem_sql_runner_gui.py
 
 ### 3. Kør CLI (terminal)
 ```bash
-python fivem_sql_runner.py
+python FDS_cli.py
 ```
 - Følg instruktionerne for framework og mappe
 
