@@ -8,7 +8,6 @@ from typing import List, Optional
 from dotenv import load_dotenv
 import mysql.connector
 
-# --- Always ensure requirements are installed ---
 REQUIRED = [
     ('mysql', 'mysql-connector-python'),
     ('dotenv', 'python-dotenv'),
@@ -18,7 +17,6 @@ for module, package in REQUIRED:
         print(f"[Auto-Installer] Installing missing package: {package}")
         subprocess.check_call([sys.executable, '-m', 'pip', 'install', package])
 
-# --- Frameworks and Patterns ---
 FRAMEWORKS = {
     'qbcore': ['qbcore', 'qb'],
     'qbx': ['qbx'],
@@ -70,7 +68,6 @@ WHITELISTED_FILES = [
     os.path.normpath('ox_doorlock/sql/ox_doorlock.sql'),
 ]
 
-# --- DB Connection Extraction ---
 def extract_mysql_url_from_cfg(cfg_path: Path) -> Optional[str]:
     with cfg_path.open(encoding='utf-8', errors='ignore') as f:
         for line in f:
